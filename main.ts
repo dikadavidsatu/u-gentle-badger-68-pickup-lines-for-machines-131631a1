@@ -13,7 +13,7 @@
 //   5. feels fresh — not a stock line with a robot word swapped in.
 // The winning line is written to /output/entry.txt (1-200 chars, UTF-8).
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 type Candidate = {
@@ -87,18 +87,36 @@ function pickBest(candidates: Candidate[]): Candidate {
   return best;
 }
 
-function main(): void {
-  const line = pickBest(CANDIDATES).text;
-
-  // The gate: 1 to 200 characters, not only white space, UTF-8.
+function validateGate(line: string): void {
+  // The gate: 1 to 200 characters, not only white space, UTF-8,
+  // a single line with no trailing whitespace.
   if (line.length < 1 || line.length > 200 || line.trim().length === 0) {
     throw new Error(`picked line is ${line.length} chars; gate needs 1-200`);
   }
+  if (line.includes("\n") || line.includes("\r")) {
+    throw new Error("picked line must be a single line");
+  }
+  if (line !== line.trimEnd()) {
+    throw new Error("picked line must not end with trailing whitespace");
+  }
+}
+
+function main(): void {
+  const line = pickBest(CANDIDATES).text;
+
+  validateGate(line);
 
   const outDir = process.env.OUTPUT_DIR ?? "/output";
+  const outPath = join(outDir, "entry.txt");
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, "entry.txt"), line + "\n", "utf8");
-  console.log(`wrote ${line.length}-char entry to ${join(outDir, "entry.txt")}`);
+  writeFileSync(outPath, line + "\n", "utf8");
+  // Read-back verification: the file must hold exactly the picked line.
+  const written = readFileSync(outPath, "utf8");
+  if (written !== line + "\n") {
+    throw new Error("read-back mismatch: entry.txt does not hold the picked line");
+  }
+  validateGate(written.trimEnd());
+  console.log(`wrote ${line.length}-char entry to ${outPath}`);
   console.log(line);
 }
 
